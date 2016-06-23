@@ -1,0 +1,1 @@
+"./FiveTM/FiveTM.obj" "./UART/uartCom.obj" "./Valve/valve.obj" "./core/comm/comm.obj" "./core/core.obj" "./main.obj" -l"libc.a" "../lnk_msp430f235.cmd" 

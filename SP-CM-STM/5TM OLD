@@ -1,0 +1,104 @@
+//In Timer Handler
+  if (g_ucCOMM_Flags & COMM_5TM_1_RX_BUSY)
+  {
+    switch(g_ucRXBitsLeft)
+    {
+      case 0x00:
+        // There are no bits left, so lets reset all the values and stop timer
+        TACTL &= ~(MC0 | MC1);
+        P_5TM_RX_IE |= c5TM_1_RX_PIN;
+        P_5TM_RX_IFG &= ~c5TM_1_RX_PIN;
+        g_ucCOMM_Flags &= ~COMM_5TM_1_RX_BUSY;
+        __bic_SR_register_on_exit(LPM4_bits); //All Clocks and CPU etc awake.//All Clocks and CPU etc awake now that we received a byte. (check if it's last later)
+
+        //Transfer from regular buffer to 5TM local Buffer
+        v5TM_Transfer(g_uca5TM_1_RX_Buffer[g_uc5TM_1_RX_BufferIndex],g_uc5TM_1_RX_BufferIndex,1);
+
+
+        if(g_uca5TM_1_RX_Buffer[g_uc5TM_1_RX_BufferIndex] == 0x0D)
+        {
+        	g_uc5TM_1_RX_BufferIndex = 0;
+        }
+        else
+        	g_uc5TM_1_RX_BufferIndex++;
+
+        break;
+
+      case 0x01:
+        if (P_5TM_RX_IN & c5TM_1_RX_PIN)
+          g_uca5TM_1_RX_Buffer[g_uc5TM_1_RX_BufferIndex] |= 0x80;
+        else
+          g_uca5TM_1_RX_Buffer[g_uc5TM_1_RX_BufferIndex] &= ~0x80;
+
+        break;
+
+      default:
+        if (P_RX_IN & RX_PIN)
+          g_uca5TM_1_RX_Buffer[g_uc5TM_1_RX_BufferIndex] |= 0x80;
+        else
+          g_uca5TM_1_RX_Buffer[g_uc5TM_1_RX_BufferIndex] &= ~0x80;
+
+        g_uca5TM_1_RX_Buffer[g_uc5TM_1_RX_BufferIndex] >>= 1;
+        break;
+    }
+    g_ucRXBitsLeft--;
+  }
+
+  /*if (g_ucCOMM_Flags & COMM_RX_SETUP)
+  {
+	  TACCR0 = g_unCOMM_BaudRateControl;
+	  g_ucCOMM_Flags |= COMM_RX_BUSY;
+	  g_ucCOMM_Flags &= ~COMM_RX_SETUP;
+	  g_ucRXBitsLeft = 0x08;
+  }*/ 
+ 
+ 
+//In P2 Interrupt Handler 
+  //5TM Sensor 1
+  if(P_5TM_RX_IFG & c5TM_1_RX_PIN)//P2IFG & BIT4
+  {
+     // Delay for half bit, this ensures we start sampling at the middle of
+     // each bit
+     TACTL &= ~(MC0 | MC1 | TAIE | TAIFG);//Halt timer, Disable interrupts
+     TACTL |= TACLR;//Clear Timer
+     TACCTL0 &= ~CCIE;//Disable Compare interrupt
+     TACCR0 = BAUD_1200_DELAY; //Input delay time in compare register
+     TACTL |= MC_1;//Start timer in UP Mode (Counts to TACCR0 then starts at 0 again)
+     while(!(TACTL & TAIFG)); //Wait until Compare register is met
+     TACTL &= ~TAIFG;
+
+     // Enable timer interrupt, configure for baud rate
+     TACTL &= ~(MC0 | MC1);
+     TACTL |= TACLR;
+     TACCTL0 |= CCIE;
+	 TACCR0 = BAUD_1200_DELAY;
+     __bic_SR_register_on_exit(LPM4_bits); //All Clocks and CPU etc awake now that we received a start bit.
+     //It will reset to LPM3 but in that LMP the timer can still run.
+
+     // Disable interrupt on RX
+     P_5TM_RX_IE &= ~c5TM_1_RX_PIN;
+     g_ucCOMM_Flags |= COMM_5TM_1_RX_BUSY;
+     g_ucRXBitsLeft = 0x08;
+     TACTL |= MC_1;
+
+     //Clear Interrupt Flag
+     P_5TM_RX_IFG &= ~c5TM_1_RX_PIN;
+     g_uc5TM_1_RX_BufferIndex = 0;
+  }
+  //5TM Sensor 2
+  if(P_5TM_RX_IFG & c5TM_2_RX_PIN)//P2IFG & BIT5
+  {
+
+  }
+  
+  
+  
+//In Init
+	  // Enable the falling edge interrupt on RX to see start bits
+	  P_5TM_RX_IES |= c5TM_1_RX_PIN;
+	  P_5TM_RX_IFG &= ~c5TM_1_RX_PIN;
+	  P_5TM_RX_IE  |= c5TM_1_RX_PIN;
+
+	  P_5TM_RX_IES |= c5TM_2_RX_PIN;
+	  P_5TM_RX_IFG &= ~c5TM_2_RX_PIN;
+	  P_5TM_RX_IE  |= c5TM_2_RX_PIN;  
